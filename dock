@@ -1,0 +1,206 @@
+#!/bin/bash
+
+defaultContainerPath='/docker/'
+
+help() {
+	printf "\
+Usage: $(basename "$0") [-h] [-d DIR] ACTION GROUP...
+Execute ACTION on each container in container group GROUP.
+
+  -h      display this help and exit
+  -d DIR  work with container groups stored in DIR
+          defaults to '$defaultContainerPath'
+
+ACTION may be one of:
+
+  start          starts previously created group (docker start)
+  stop           stops previously created group (docker stop)
+  remove         removes containers (docker rm -v)
+  create         runs commands in definition file to create GROUP
+  build          builds images for GROUP from defined source repositories
+  pull           pulls images without defined source repositories from registry
+  backup         renames containers in GROUP to have a -backup suffix
+  remove-backup  removes previous backup
+  restart        restart GROUP (stop, start)
+  recreate       recreate GROUP (pull, build, stop, remove, create)
+  update         update GROUP (pull, build, stop, remove-backup, backup, create)
+
+Each container group consists of a shell script at DIR/definitions/GROUP that
+defines the group.
+Documentation for groups may be stored in files in DIR/docs/GROUP/.
+Source files for building images will be stored in DIR/build/GROUP/.
+Each group also has the following directories available for container volumes,
+each with associated environment variables available in the definition script:
+
+  DIR/volumes-config/GROUP/
+      used for text-based configuration files, may be world-readable
+      avoid placing secrets, keys or passwords here as this directory
+      available as CONFIG_VOLUMES_DIR
+  DIR/volumes-data/GROUP/
+      directory where volumes that store data should be placed
+      this directory should NOT be world-readable
+      available as DATA_VOLUMES_DIR
+  DIR/volumes-secret/GROUP/
+      used for configuration files that include secrets, keys or passwords
+      this directory should NOT be world-readable
+      available as SECRET_VOLUMES_DIR
+" >&2
+}
+
+log() {
+	printf '\e[1m%s\e[0m\n' "$*" >&2
+}
+
+start() {
+	local container="$1"
+
+	log "Starting '$container'"
+	sudo docker start "$container"
+}
+
+stop() {
+	local container="$1"
+
+	log "Stopping '$container'"
+	sudo docker stop "$container"
+}
+
+remove() {
+	local container="$1"
+
+	log "Removing '$container'"
+	sudo docker rm -v "$container"
+}
+
+create() {
+	local container="$1"
+
+	log "Creating '$container'"
+	"run_$container"
+}
+
+build() {
+	local container="$1"
+	local image="$2"
+	local repository="$3"
+
+	local buildDir="$containerPath/$image/"
+
+	[ -z "$repository" ] && return
+
+	log "Building image for '$container' in '$buildDir'"
+
+	if [ -d "$buildDir" ]; then
+		(
+			cd "$buildDir" || exit
+			sudo git pull
+		)
+	else
+		sudo git clone "$repository" "$buildDir"
+	fi
+
+	sudo docker build -t "$image" "$buildDir"
+}
+
+pull() {
+	local container="$1"
+	local image="$2"
+	local repository="$3"
+
+	[ -n "$repository" ] && return
+
+	log "Pulling image for '$container'"
+	sudo docker pull "$image"
+}
+
+backup() {
+	local container="$1"
+
+	log "Backing up '$container'"
+	sudo docker rename "$container" "$container-backup"
+	sudo docker update --restart=no "$container-backup"
+}
+
+remove-backup() {
+	local container="$1"
+
+	log "Removing backup for '$container'"
+	sudo docker rm "$container-backup"
+}
+
+if [ "$1" == '-h' ]; then
+	help
+	exit
+fi
+
+if [ "$1" == '-d' ]; then
+	containerPath="$2"
+	shift 2
+else
+	containerPath="$defaultContainerPath"
+fi
+
+log "Using container directory '$containerPath'"
+
+actions=""
+
+case "$1" in
+	start)
+		actions="$actions start"
+		;;
+	stop)
+		actions="$actions stop"
+		;;
+	remove)
+		actions="$actions stop remove"
+		;;
+	remove-backup)
+		actions="$actions remove-backup"
+		;;
+	backup)
+		actions="$actions remove-backup backup"
+		;;
+	pull)
+		actions="$actions pull"
+		;;
+	build)
+		actions="$actions build"
+		;;
+	create)
+		actions="$actions pull build create"
+		;;
+	restart)
+		actions="$actions stop start"
+		;;
+	recreate)
+		actions="$actions pull build stop remove create"
+		;;
+	update)
+		actions="$actions pull build stop remove-backup backup create"
+		;;
+	*)
+		log "Invalid action '$action'"
+		help
+		exit 1
+		;;
+esac
+
+shift
+
+for action in $actions; do
+	for containerGroup in "$@"; do
+		export DATA_VOLUMES_DIR="$containerPath/volumes-data/$containerGroup/"
+		export CONFIG_VOLUMES_DIR="$containerPath/volumes-config/$containerGroup/"
+		export SECRET_VOLUMES_DIR="$containerPath/volumes-secret/$containerGroup/"
+
+		(
+			source "$containerPath/definitions/$containerGroup" || continue 
+			for container in "${order[@]}"; do
+				image=${images["$container"]}
+				repository=${repositories["$container"]}
+
+				"$action" "$container" "$image" "$repository"
+			done
+		)
+	done
+done
