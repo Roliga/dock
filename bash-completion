@@ -1,0 +1,55 @@
+_dock() {
+	local actions first_opts current previous groups w a containerPath i
+	COMPREPLY=()
+	actions=(
+		create
+		build
+		start
+		stop
+		)
+	first_opts=(
+		-h
+		-d
+		)
+	current="${COMP_WORDS[COMP_CWORD]}"
+	previous="${COMP_WORDS[COMP_CWORD-1]}"
+
+	if [ "$COMP_CWORD" -eq 1 ]; then
+		COMPREPLY=( $(compgen -W "${first_opts[*]} ${actions[*]}" -- "$current") )
+		return 0
+	elif [ "$previous" == "-d" ]; then
+		COMPREPLY=( $(compgen -f "$current") )
+		return 0
+	else
+		for i in "${!COMP_WORDS[@]}"; do
+			if [ "${COMP_WORDS[$i]}" == "-h" ]; then
+				return 0
+			fi
+			if [ "${COMP_WORDS[$i-1]}" == "-d" ]; then
+				containerPath="${COMP_WORDS[$i]}"
+			fi
+		done
+
+		if [ -z "$containerPath" ] && [ -f '/etc/dock' ]; then
+			containerPath="$(source '/etc/dock' > /dev/null; echo "$defaultContainerPath")"
+		fi
+
+		if [ -d "$containerPath/definitions/" ]; then
+			groups="$(find "$containerPath/definitions/" -type f -exec basename {} \;)"
+		fi
+
+		for w in "${COMP_WORDS[@]}"; do
+			if [ "$w" == "$current" ]; then
+				continue
+			fi
+			for a in "${actions[@]}"; do
+				if [ "$w" == "$a" ]; then
+					COMPREPLY=( $(compgen -W "$groups" -- "$current") )
+					return 0
+				fi
+			done
+		done
+		COMPREPLY=( $(compgen -W "${actions[*]}" -- "$current") )
+	fi
+}
+complete -F _dock dock
