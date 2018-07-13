@@ -15,7 +15,6 @@ Execute ACTION on each container in container group GROUP.
 
   -h      display this help and exit
   -d DIR  work with container groups stored in DIR
-          defaults to '$defaultContainerPath'
 
 ACTION may be one of:
 
@@ -50,6 +49,11 @@ each with associated environment variables available in the definition script:
       used for configuration files that include secrets, keys or passwords
       this directory should NOT be world-readable
       available as SECRET_VOLUMES_DIR
+
+A shell script can be placed at '/etc/dock' which will be loaded on startup.
+The following variables will be used from the script:
+
+  defaultContainerPath  Default value for DIR
 " >&2
 }
 
