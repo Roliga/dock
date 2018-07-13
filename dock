@@ -22,7 +22,7 @@ ACTION may be one of:
   backup         renames containers in GROUP to have a -backup suffix
   remove-backup  removes previous backup
   restart        restart GROUP (stop, start)
-  recreate       recreate GROUP (pull, build, stop, remove, create)
+  recreate       recreate GROUP (conditional-build, stop, remove, create)
   update         update GROUP (pull, build, stop, remove-backup, backup, create)
 
 Each container group consists of a shell script at DIR/definitions/GROUP that
@@ -102,6 +102,14 @@ build() {
 	sudo docker build -t "$image" "$buildDir"
 }
 
+conditional-build() {
+	local image="$2"
+
+	if [ -z "$(sudo docker image ls -q "$image")" ]; then
+		build "$@"
+	fi
+}
+
 pull() {
 	local container="$1"
 	local image="$2"
@@ -167,13 +175,13 @@ case "$1" in
 		actions="$actions build"
 		;;
 	create)
-		actions="$actions pull build create"
+		actions="$actions conditional-build create"
 		;;
 	restart)
 		actions="$actions stop start"
 		;;
 	recreate)
-		actions="$actions pull build stop remove create"
+		actions="$actions conditional-build stop remove create"
 		;;
 	update)
 		actions="$actions pull build stop remove-backup backup create"
