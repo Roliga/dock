@@ -2,10 +2,17 @@ _dock() {
 	local actions first_opts current previous groups w a containerPath i
 	COMPREPLY=()
 	actions=(
-		create
-		build
 		start
 		stop
+		remove
+		create
+		build
+		pull
+		backup
+		remove-backup
+		restart
+		recreate
+		update
 		)
 	first_opts=(
 		-h
