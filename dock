@@ -33,7 +33,7 @@ ACTION may be one of:
 Each container group consists of a shell script at DIR/definitions/GROUP that
 defines the group.
 Documentation for groups may be stored in files in DIR/docs/GROUP/.
-Source files for building images will be stored in DIR/build/GROUP/.
+Source files for building images will be stored in DIR/build/IMAGE/.
 Each group also has the following directories available for container volumes,
 each with associated environment variables available in the definition script:
 
@@ -94,7 +94,7 @@ build() {
 	local image="$2"
 	local repository="$3"
 
-	local buildDir="$containerPath/$image/"
+	local buildDir="$containerPath/build/$image/"
 
 	[ -z "$repository" ] && return
 
