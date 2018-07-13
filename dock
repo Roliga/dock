@@ -1,6 +1,12 @@
 #!/bin/bash
 
-defaultContainerPath='/docker/'
+if [ -f '/etc/dock' ]; then
+	source '/etc/dock'
+fi
+
+if [ -z "$defaultContainerPath" ]; then
+	defaultContainerPath='/docker/'
+fi
 
 help() {
 	printf "\
